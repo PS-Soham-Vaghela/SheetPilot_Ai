@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SheetPilot AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-main:       #fafafa;
+      --surface:       #ffffff;
+      --surface-hover: #f3f4f6;
+      --border:        #e5e7eb;
+      --border-focus:  #d1d5db;
+      --text-main:     #111827;
+      --text-muted:    #6b7280;
+      --text-light:    #9ca3af;
+      --accent:        #000000;
+      --accent-text:   #ffffff;
+      --red:           #ef4444;
+      --green:         #10b981;
+      --amber:         #f59e0b;
+      --radius:        8px;
+      --radius-sm:     6px;
+      --radius-full:   9999px;
+      --font:          'Space Grotesk', system-ui, -apple-system, sans-serif;
+      --shadow-sm:     0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md:     0 4px 6px -1px rgba(0, 0, 0, 0.07);
+    }
+
+    body {
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text-main);
+      background: var(--bg-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .header .logo { 
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+    }
+    .header h1 { font-size: 14px; font-weight: 700; flex: 1; letter-spacing: -0.01em; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border-focus); flex-shrink: 0;
+    }
+    .status-dot.ok  { background: var(--green); }
+    .status-dot.err { background: var(--red); }
+
+    /* ── Config panel ─────────────────────────────────────────────── */
+    .config-panel {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 16px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .config-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .config-panel label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .config-panel input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      background: var(--surface);
+      color: var(--text-main);
+      font-family: inherit;
+      outline: none;
+      transition: all 0.15s ease-in-out;
+    }
+    .config-panel input:focus { border-color: var(--border-focus); }
+
+    .row-config {
+      display: flex;
+      gap: 8px;
+    }
+    .row-config > div { flex: 1; }
+
+    /* ── Action bar ───────────────────────────────────────────────── */
+    .action-bar {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--surface);
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease-in-out;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary  { background: var(--accent); color: var(--accent-text); border-color: var(--accent); width: 100%; justify-content: center; }
+    .btn-primary:hover:not(:disabled) { background: #333; }
+    .btn-success  { background: var(--green); color: #fff; border-color: var(--green); flex: 1; justify-content: center; }
+    .btn-success:hover:not(:disabled) { background: #0e9f6e; }
+    .btn-outline  {
+      background: transparent; color: var(--text-muted);
+      border: 1px solid var(--border); flex: 1; justify-content: center;
+    }
+    .btn-outline:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-main); }
+
+    /* ── Scroll area ──────────────────────────────────────────────── */
+    .scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+    }
+
+    /* ── State screens ────────────────────────────────────────────── */
+    .state-idle, .state-loading, .state-error {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 40px 10px;
+    }
+    .state-idle .icon, .state-error .icon {
+      color: var(--text-light);
+    }
+    .state-loading .spinner {
+      width: 24px; height: 24px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .state-error { color: var(--red); }
+
+    /* ── Proposals list ───────────────────────────────────────────── */
+    .proposals-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .proposals-header h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    .badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: var(--surface-hover);
+      color: var(--text-muted);
+      font-weight: 500;
+      border: 1px solid var(--border);
+    }
+
+    .proposal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 10px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .proposal-card.confidence-high   { border-left: 3px solid var(--green); }
+    .proposal-card.confidence-medium { border-left: 3px solid var(--amber); }
+    .proposal-card.confidence-low    { border-left: 3px solid var(--red);   }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+      cursor: pointer;
+    }
+    .card-header .field-name {
+      font-weight: 600;
+      font-size: 12px;
+      flex: 1;
+    }
+    .conf-badge {
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .conf-high   { background: #e6f4ea; color: #137333; }
+    .conf-medium { background: #fef7e0; color: #b06000; }
+    .conf-low    { background: #fce8e6; color: #c5221f; }
+
+    .card-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .value-input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      background: var(--surface);
+      color: var(--text-main);
+      font-family: inherit;
+      outline: none;
+      transition: all 0.15s ease-in-out;
+    }
+    .value-input:focus { border-color: var(--border-focus); }
+    .value-input.edited { border-color: var(--amber); background: #fffde7; }
+
+    .source-snippet {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-main);
+      border-radius: var(--radius-sm);
+      padding: 6px 8px;
+      border-left: 2px solid var(--border-focus);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Missing fields ───────────────────────────────────────────── */
+    .missing-section { margin-top: 16px; margin-bottom: 10px; }
+    .missing-section h3 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .missing-chip {
+      display: inline-block;
+      padding: 3px 8px;
+      background: #fce8e6;
+      color: #c5221f;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      margin: 2px 4px 2px 0;
+      font-weight: 500;
+    }
+
+    /* ── Approve bar ──────────────────────────────────────────────── */
+    .approve-bar {
+      background: var(--surface);
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* ── Success screen ───────────────────────────────────────────── */
+    .state-success {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 12px;
+      color: var(--green);
+      text-align: center;
+      padding: 40px 10px;
+    }
+    .state-success p { color: var(--text-muted); font-size: 12px; }
+
+    /* SVG icon styles */
+    .icon-svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .icon-svg-lg {
+      width: 24px;
+      height: 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <div class="header">
+    <span class="logo">
+      <svg class="icon-svg" style="color: var(--text-main); stroke-width: 2.5;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18M14 15l3-3-3-3M7 12h10"/></svg>
+    </span>
+    <h1>SheetPilot AI</h1>
+    <span id="statusDot" class="status-dot" title="Backend status"></span>
+  </div>
+
+  <!-- ── Config ── -->
+  <div class="config-panel">
+    <div class="config-group">
+      <label for="workbookPath">Excel Workbook Path</label>
+      <input
+        id="workbookPath"
+        type="text"
+        placeholder="C:\path\to\your\workbook.xlsx"
+      />
+    </div>
+    <div class="row-config">
+      <div class="config-group">
+        <label for="activeRow">Active Row</label>
+        <input id="activeRow" type="number" value="2" min="1" />
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Analyze button ── -->
+  <div class="action-bar">
+    <button id="analyzeBtn" class="btn btn-primary">
+      <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Analyze This Page
+    </button>
+  </div>
+
+  <!-- ── Main content area ── -->
+  <div class="scroll-area" id="mainContent">
+    <div class="state-idle">
+      <svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <p>Configure your workbook path above, then click <strong>Analyze This Page</strong> to extract data.</p>
+    </div>
+  </div>
+
+  <!-- ── Approve bar (hidden until proposals arrive) ── -->
+  <div class="approve-bar" id="approveBar" style="display:none;">
+    <button id="rejectBtn"  class="btn btn-outline">
+      <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Dismiss
+    </button>
+    <button id="approveBtn" class="btn btn-success">
+      <svg class="icon-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      Approve &amp; Sync
+    </button>
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html>

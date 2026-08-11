@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "sheetpilot-excel": {
+      "command": "python",
+      "args": [
+        "-m",
+        "backend.mcp.excel_server"
+      ],
+      "env": {
+        "PYTHONPATH": "c:/Users/SohamVaghela/Downloads/L2_Project/sheetpilot-ai"
+      }
+    }
+  }
+}
