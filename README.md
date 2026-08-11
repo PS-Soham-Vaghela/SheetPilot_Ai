@@ -23,8 +23,7 @@ In logistics, accounting, and supply chain management, operators spend hours cop
 5. **Vite Dashboard**: Provides a comprehensive web interface to manage workbooks, view analysis history, adjust extraction settings, and run direct analysis.
 WebApp Solution
 <img width="1916" height="888" alt="image" src="https://github.com/user-attachments/assets/53a4a51f-ad8a-4f41-a51e-ec66fa0c675b" />
-Extension
-<img width="545" height="796" alt="Screenshot 2026-08-11 121414" src="https://github.com/user-attachments/assets/3b4cf876-48b3-4b49-b845-33183137ccbb" />
+
 
 
 
