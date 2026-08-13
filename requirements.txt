@@ -7,8 +7,13 @@ python-multipart==0.0.32
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
+# MongoDB (sync driver — thread-safe connection pooling)
+pymongo==4.12.1
+dnspython>=2.6.0
+
 # Web scraping for server-side URL analyze
 beautifulsoup4==4.12.3
+lxml>=5.0.0
 
 # MCP SDK (1.29.0 is last stable 1.x; compatible with fastapi 0.141+)
 mcp==1.29.0

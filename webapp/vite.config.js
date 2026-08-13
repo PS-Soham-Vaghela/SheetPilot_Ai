@@ -12,12 +12,15 @@ export default defineConfig({
       '/dashboard': 'http://localhost:8000',
       '/workbooks': 'http://localhost:8000',
       '/history': 'http://localhost:8000',
-      '/analyze': 'http://localhost:8000',
       '/analyze-url': 'http://localhost:8000',
+      '/analyze': 'http://localhost:8000',
       '/commit': 'http://localhost:8000',
       '/undo': 'http://localhost:8000',
       '/schema': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
+      '/suggest-mappings': 'http://localhost:8000',
+      '/next-empty-row': 'http://localhost:8000',
+      '/chat': 'http://localhost:8000',
     }
   },
   build: { outDir: 'dist', sourcemap: false }

@@ -52,7 +52,7 @@ def get_missing_fields_csv(file_path: str, row: int) -> dict:
     return {"row": row, "missing_fields": missing, "total_missing": len(missing)}
 
 
-def commit_to_csv(file_path: str, row: int, approved_mappings: list[dict]) -> dict:
+def commit_to_csv(file_path: str, row: int, approved_mappings: list[dict], page_url: str = "") -> dict:
     """
     Write approved mappings into a CSV. Uses temp-file + atomic replace
     so partial writes are safe.
@@ -100,6 +100,22 @@ def commit_to_csv(file_path: str, row: int, approved_mappings: list[dict]) -> di
         writer.writerows(all_rows)
         tmp.close()
         os.replace(tmp.name, file_path)
+
+        # ── Log to history ───────────────────────────────────────────────────
+        try:
+            from backend.db.history import log_commit
+            for w in written:
+                w["old_value"] = ""
+            log_commit(
+                workbook_path=file_path,
+                worksheet=path.stem,
+                row=row,
+                page_url=page_url or "",
+                written=written,
+                approved_mappings=approved_mappings,
+            )
+        except Exception as he:
+            logger.warning("CSV History log failed (non-fatal): %s", he)
 
         return {
             "status":         "committed",

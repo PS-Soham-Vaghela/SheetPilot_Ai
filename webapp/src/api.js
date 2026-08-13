@@ -1,6 +1,7 @@
-/* Centralized API client — no auth required */
+/* Centralized API client — respects custom backend URL setting */
 
-const BASE = import.meta.env.VITE_API_BASE || ''
+const savedBase = localStorage.getItem('sp_backend_url') || ''
+const BASE = savedBase ? savedBase.replace(/\/$/, '') : (import.meta.env.VITE_API_BASE || '')
 
 async function request(method, path, body = null) {
   const headers = { 'Content-Type': 'application/json' }
@@ -57,8 +58,8 @@ export const analyzeApi = {
 
 // ── Commit / Undo ─────────────────────────────────────────────────────────────
 export const commitApi = {
-  approve: (workbookPath, row, mappings) =>
-    post(`/commit?workbook_path=${encodeURIComponent(workbookPath)}`, { row, approved_mappings: mappings }),
+  approve: (workbookPath, row, mappings, pageUrl = '') =>
+    post(`/commit?workbook_path=${encodeURIComponent(workbookPath)}${pageUrl ? `&page_url=${encodeURIComponent(pageUrl)}` : ''}`, { row, approved_mappings: mappings }),
   undo: (workbookPath, historyId = null) =>
     post('/undo', { workbook_path: workbookPath, history_id: historyId }),
 }
@@ -67,3 +68,10 @@ export const commitApi = {
 export const systemApi = {
   health: () => get('/health'),
 }
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+export const chatApi = {
+  workbook: (workbookPath, query) =>
+    post('/chat/workbook', { workbook_path: workbookPath, query }),
+}
+

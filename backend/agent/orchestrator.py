@@ -25,127 +25,7 @@ logger = logging.getLogger(__name__)
 _mcp = AgentMCPClient()
 
 
-def handle_page_load(
-    page_text: str,
-    page_url: str,
-    workbook_path: str,
-    active_row: int,
-    worksheet_name: str | None = None,
-) -> StagedMapping:
-    logger.info("handle_page_load url=%s row=%d text_len=%d",
-                page_url, active_row, len(page_text))
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        schema_future = pool.submit(
-            _mcp.read_schema, workbook_path=workbook_path,
-            active_row=active_row, worksheet_name=worksheet_name
-        )
-        rag_future = pool.submit(rag.index_page, page_text=page_text, page_url=page_url)
-        schema   = schema_future.result()
-        n_chunks = rag_future.result()
-
-    if "error" in schema:
-        raise RuntimeError(f"read_schema failed: {schema['error']}")
-    logger.info("Schema columns: %s | Indexed %d chunks", schema.get("columns"), n_chunks)
-
-    # ── Missing fields ────────────────────────────────────────────────────────
-    missing_result = _mcp.get_missing_fields(workbook_path=workbook_path, row=active_row,
-                                              worksheet_name=worksheet_name)
-    if "error" in missing_result:
-        raise RuntimeError(f"get_missing_fields failed: {missing_result['error']}")
-
-    missing_fields: list[str] = missing_result.get("missing_fields", [])
-    logger.info("Missing: %s", missing_fields)
-
-    if not missing_fields:
-        _mcp.propose_mapping(row=active_row, mappings=[], missing_fields=[])
-        return StagedMapping(
-            row=active_row, mappings=[], missing_fields=[],
-            all_columns=schema.get("columns", []),
-            staged_at=datetime.now(timezone.utc).isoformat(),
-        )
-
-    # ── RAG search ────────────────────────────────────────────────────────────
-    # Semantic keyword map — expands field names into searchable concepts.
-    # For INFER fields (theme, category, industry) we use broad "about/mission"
-    # vocabulary so the RAG retrieves the richest descriptive passages.
-    FIELD_SEMANTIC = {
-        # Concrete extraction fields
-        "website_name":  "company name brand organisation title",
-        "website_url":   "website URL link https www address homepage",
-        "company_name":  "company name brand organisation",
-        "name":          "name title person company",
-        "url":           "URL link website https www",
-        "email":         "email contact address",
-        "phone":         "phone number contact telephone",
-        "address":       "address location city street",
-        "title":         "title name heading",
-        "price":         "price cost amount fee",
-        "date":          "date time year month",
-        # Inference fields — fetch rich descriptive / about-page passages
-        "website_theme": (
-            "company does mission vision about empowers enables provides offers "
-            "industry sector technology platform solutions services expertise "
-            "what we do our products our services overview"
-        ),
-        "description": (
-            "about overview mission vision empowers enables provides offers "
-            "company does solutions services expertise platform"
-        ),
-        "category":     "industry sector type category market niche domain segment",
-        "industry":     "industry sector market domain segment vertical business",
-        "summary":      "about overview mission what we do description",
-        "topic":        "topic focus subject area about overview industry",
-        "theme":        (
-            "company does mission vision about empowers enables provides industry "
-            "sector technology solutions services expertise overview"
-        ),
-        "tags":         "keywords topic industry focus area category",
-        "keywords":     "topic focus industry category about overview",
-    }
-
-    # Import the inference-field detector from prompt_templates
-    from backend.llm.prompt_templates import _is_inference_field
-
-    concrete_fields = [f for f in missing_fields if not _is_inference_field(f)]
-    infer_fields    = [f for f in missing_fields if     _is_inference_field(f)]
-
-    def _build_query(fields: list[str]) -> str:
-        parts = []
-        for f in fields:
-            key = f.lower().replace(" ", "_").replace("-", "_")
-            parts.append(FIELD_SEMANTIC.get(key, f.replace("_", " ").replace("-", " ")))
-        return " ".join(parts)
-
-    seen_texts: set[str] = set()
-    passages: list = []
-
-    if concrete_fields:
-        q = _build_query(concrete_fields)
-        for p in rag.search(query=q, page_url=page_url, k=4):
-            if p.text not in seen_texts:
-                seen_texts.add(p.text)
-                passages.append(p)
-
-    if infer_fields:
-        # Use more passages (k=7) so the LLM has rich descriptive context to infer from
-        q = _build_query(infer_fields)
-        for p in rag.search(query=q, page_url=page_url, k=7):
-            if p.text not in seen_texts:
-                seen_texts.add(p.text)
-                passages.append(p)
-
-    if not passages:
-        # Fallback: search all fields together
-        passages = rag.search(query=_build_query(missing_fields), page_url=page_url, k=5)
-
-    logger.info(
-        "RAG passages=%d (concrete=%d infer=%d) top_score=%.3f",
-        len(passages), len(concrete_fields), len(infer_fields),
-        passages[0].score if passages else 0.0,
-    )
-
-    # ── LLM ──────────────────────────────────────────────────────────────────
 def validate_mapping(field: str, value: str) -> str | None:
     """Validate value formats and return error message if invalid, or None."""
     if not value:
@@ -153,21 +33,66 @@ def validate_mapping(field: str, value: str) -> str | None:
     f_lower = field.lower().replace(" ", "_").replace("-", "_")
     val_strip = value.strip()
     
+    NON_URL_KEYWORDS = {"name", "title", "desc", "description", "theme", "category", "type", "summary", "topic"}
+    
     # Email validation
-    if "email" in f_lower:
+    if "email" in f_lower and not any(k in f_lower for k in ["name", "title", "desc", "type"]):
         if "@" not in val_strip or "." not in val_strip.split("@")[-1]:
             return "Must be a valid email format containing '@' and a domain name (e.g. name@domain.com)."
     
-    # URL validation
-    if any(x in f_lower for x in ["url", "website", "link"]):
+    # URL validation — MUST NOT match name/title/description/theme fields like website_name
+    is_url_field = any(x in f_lower for x in ["url", "website", "link"]) and not any(k in f_lower for k in NON_URL_KEYWORDS)
+    if is_url_field:
         if not val_strip.startswith(("http://", "https://")) and "." not in val_strip:
             return "Must be a valid URL format (e.g. https://example.com)."
             
     # Numeric / Phone validation
-    if any(x in f_lower for x in ["phone", "price", "count", "num"]):
+    is_numeric_field = any(x in f_lower for x in ["phone", "price", "count", "cost", "amount"]) or f_lower.endswith("_num") or f_lower == "num"
+    if is_numeric_field and not any(k in f_lower for k in ["name", "title", "desc", "theme"]):
         if not any(char.isdigit() for char in val_strip):
             return "Must contain at least one numerical digit."
     
+    return None
+
+
+def find_best_column_match(key: str, columns: list[str]) -> str | None:
+    """Safely match LLM field names to Excel schema columns avoiding crude substring clashes."""
+    if not key or not columns:
+        return None
+    key_clean = key.lower().strip().replace(" ", "_").replace("-", "_")
+    casing_map = {col.lower().strip().replace(" ", "_").replace("-", "_"): col for col in columns}
+    
+    # 1. Exact match (case/space/underscore insensitive)
+    if key_clean in casing_map:
+        return casing_map[key_clean]
+        
+    # 2. Token overlap similarity
+    key_words = set(key_clean.split("_"))
+    best_match = None
+    best_score = -1.0
+    
+    for col in columns:
+        col_clean = col.lower().strip().replace(" ", "_").replace("-", "_")
+        col_words = set(col_clean.split("_"))
+        
+        intersection = key_words.intersection(col_words)
+        if not intersection:
+            continue
+            
+        union = key_words.union(col_words)
+        score = len(intersection) / len(union)
+        
+        # Give higher weight if key is a specific token inside col
+        if key_clean in col_words:
+            score += 0.5
+            
+        if score > best_score:
+            best_score = score
+            best_match = col
+            
+    if best_match and best_score >= 0.3:
+        return best_match
+        
     return None
 
 
@@ -332,6 +257,25 @@ def handle_page_load(
         except Exception as e:
             logger.exception("Error during LLM self-correction loop")
 
+    # Restore case-sensitivity and do fuzzy matching of field names from Excel schema
+    columns = schema.get("columns", [])
+    
+    # Correct mappings
+    for m in llm_output.mappings:
+        matched = find_best_column_match(m.field, columns)
+        if matched:
+            m.field = matched
+            
+    # Correct missing_fields
+    corrected_missing = []
+    for f in llm_output.missing_fields:
+        matched = find_best_column_match(f, columns)
+        if matched:
+            corrected_missing.append(matched)
+        else:
+            corrected_missing.append(f)
+    llm_output.missing_fields = list(set(corrected_missing))
+
     logger.info("LLM: %d mappings, %d missing",
                 len(llm_output.mappings), len(llm_output.missing_fields))
 
@@ -343,9 +287,10 @@ def handle_page_load(
         parsed_page = urlparse(page_url)
         page_origin = f"{parsed_page.scheme}://{parsed_page.netloc}"
         fixed_mappings = []
+        NON_URL_KEYWORDS = {"name", "title", "desc", "description", "theme", "category", "type", "summary", "topic"}
         for m in llm_output.mappings:
             field_key = m.field.lower().replace(" ", "_").replace("-", "_")
-            is_url_field = "url" in field_key or "website" in field_key or "link" in field_key
+            is_url_field = any(x in field_key for x in ["url", "website", "link"]) and not any(k in field_key for k in NON_URL_KEYWORDS)
             if is_url_field and m.value:
                 extracted = m.value.strip()
                 parsed_val = urlparse(extracted)
@@ -426,6 +371,7 @@ def handle_user_approval(
         workbook_path=workbook_path,
         row=row,
         approved_mappings=commit_payload,
+        page_url=page_url,
     )
 
     if "error" in result:

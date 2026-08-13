@@ -85,7 +85,7 @@ class AgentMCPClient:
         elif tool_name == "get_missing_fields":
             return get_missing_fields_csv(wb, kwargs.get("row", 2))
         elif tool_name == "commit_to_excel":
-            return commit_to_csv(wb, kwargs["row"], kwargs["approved_mappings"])
+            return commit_to_csv(wb, kwargs["row"], kwargs["approved_mappings"], page_url=kwargs.get("page_url", ""))
         elif tool_name == "propose_mapping":
             return {"status": "staged", "row": kwargs.get("row", 2),
                     "field_count": len(kwargs.get("mappings", [])),
@@ -119,12 +119,14 @@ class AgentMCPClient:
         workbook_path: str,
         row: int,
         approved_mappings: list[dict],
+        page_url: str = "",
     ) -> dict:
         return self.call(
             "commit_to_excel",
             workbook_path=workbook_path,
             row=row,
             approved_mappings=approved_mappings,
+            page_url=page_url,
         )
 
     def get_missing_fields(self, workbook_path: str, row: int,

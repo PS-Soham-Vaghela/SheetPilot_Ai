@@ -1,11 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { analyzeApi, commitApi } from '../api.js'
 import { useToast } from '../App.jsx'
 import FieldBadge from '../components/FieldBadge.jsx'
 
 export default function Analyze() {
   const toast = useToast()
-  const [url,        setUrl]        = useState('')
+  const location = useLocation()
+  
+  const searchParams = new URLSearchParams(location.search)
+  const initialUrl = searchParams.get('url') || ''
+
+  const [url,        setUrl]        = useState(initialUrl)
   const [wbPath,     setWbPath]     = useState(localStorage.getItem('sp_default_wb') || '')
   const [row,        setRow]        = useState(2)
   const [loading,    setLoading]    = useState(false)
@@ -14,8 +20,13 @@ export default function Analyze() {
   const [committing, setCommitting] = useState(false)
   const [committed,  setCommitted]  = useState(false)
 
+  useEffect(() => {
+    const qUrl = new URLSearchParams(location.search).get('url')
+    if (qUrl) setUrl(qUrl)
+  }, [location.search])
+
   const analyze = async (e) => {
-    e.preventDefault()
+    e?.preventDefault()
     if (!url || !wbPath) return
     setLoading(true); setProposals(null); setCommitted(false)
     try {
@@ -42,11 +53,20 @@ export default function Analyze() {
       await commitApi.approve(wbPath, Number(row), mappings)
       toast.success(`Row ${row} synced to Excel!`)
       setCommitted(true)
+      // Auto-increment row for next entry
+      setRow(r => Number(r) + 1)
     } catch (err) {
       toast.error(err.message)
     } finally {
       setCommitting(false)
     }
+  }
+
+  const nextEntry = () => {
+    setProposals(null)
+    setCommitted(false)
+    setValues({})
+    setUrl('')
   }
 
   return (
@@ -72,7 +92,7 @@ export default function Analyze() {
             </div>
             <div style={{ width:100 }}>
               <label className="inp-label">Active row</label>
-              <input className="inp" type="number" min={1} value={row} onChange={e=>setRow(e.target.value)} />
+              <input className="inp" type="number" min={2} value={row} onChange={e=>setRow(e.target.value)} />
             </div>
           </div>
           <button className="btn btn-primary" type="submit" disabled={loading || !url || !wbPath} style={{ minWidth:160 }}>
@@ -92,10 +112,17 @@ export default function Analyze() {
       {proposals && !loading && (
         <div>
           <div className="section-hdr" style={{ marginBottom:16 }}>
-            <h2>AI Proposals — Row {row}</h2>
+            <h2>AI Proposals — Row {committed ? Number(row) - 1 : row}</h2>
             <div style={{ display:'flex', gap:8 }}>
               {committed
-                ? <span className="badge badge-active">✓ Synced!</span>
+                ? (
+                  <>
+                    <span className="badge badge-active">✓ Synced!</span>
+                    <button className="btn btn-primary" onClick={nextEntry}>
+                      Next Entry →
+                    </button>
+                  </>
+                )
                 : <button className="btn btn-primary" onClick={approve} disabled={committing}>
                     {committing ? '…' : '✓ Approve & Sync'}
                   </button>
@@ -129,3 +156,4 @@ export default function Analyze() {
     </div>
   )
 }
+

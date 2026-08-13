@@ -12,7 +12,7 @@
  * from state on each change (simple, no framework needed at this scale).
  */
 
-const BACKEND = "http://127.0.0.1:8000";
+let BACKEND = "http://127.0.0.1:8000";
 const STORAGE_KEYS = { workbookPath: "sp_workbook_path", activeRow: "sp_active_row" };
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
@@ -45,8 +45,11 @@ function saveSettings() {
 
 function loadSettings() {
   chrome.storage.local.get(
-    [STORAGE_KEYS.workbookPath, STORAGE_KEYS.activeRow],
+    [STORAGE_KEYS.workbookPath, STORAGE_KEYS.activeRow, "sp_backend_url"],
     (result) => {
+      if (result.sp_backend_url) {
+        BACKEND = result.sp_backend_url;
+      }
       if (result[STORAGE_KEYS.workbookPath]) {
         workbookPathInput.value = result[STORAGE_KEYS.workbookPath];
       }
@@ -271,7 +274,7 @@ approveBtn.addEventListener("click", async () => {
 
   try {
     const response = await fetch(
-      `${BACKEND}/commit?workbook_path=${encodeURIComponent(workbookPath)}`,
+      `${BACKEND}/commit?workbook_path=${encodeURIComponent(workbookPath)}&page_url=${encodeURIComponent(activeTabUrl || '')}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

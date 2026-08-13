@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { dashboardApi } from '../api.js'
+import { dashboardApi, chatApi } from '../api.js'
 
 export default function Dashboard() {
   const navigate  = useNavigate()
@@ -56,19 +56,14 @@ export default function Dashboard() {
 
     setChatLoading(true)
     try {
-      const response = await fetch('http://127.0.0.1:8000/chat/workbook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workbook_path: activeWb, query: userQuery })
-      })
-      const data = await response.json()
-      if (response.ok && data.response) {
+      const data = await chatApi.workbook(activeWb, userQuery)
+      if (data.response) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.detail || 'Failed to retrieve answer from the workbook.' }])
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Make sure the backend server is running.' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: err.message || 'Connection error. Make sure the backend server is running.' }])
     } finally {
       setChatLoading(false)
     }
@@ -185,9 +180,9 @@ export default function Dashboard() {
                 
                 let hostname = 'Unknown'
                 try {
-                  hostname = new URL(r.url).hostname.replace('www.', '')
+                  hostname = new URL(r.page_url).hostname.replace('www.', '')
                 } catch {
-                  hostname = r.url || 'Unknown'
+                  hostname = r.page_url || 'Unknown'
                 }
                 
                 return (

@@ -35,7 +35,7 @@ class TextChunk:
 
 
 # ── Text cleaning ─────────────────────────────────────────────────────────────
-_WHITESPACE_RE = re.compile(r"\s+")
+_WHITESPACE_RE = re.compile(r"[^\S\n\r]+")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _MULTI_NEWLINE_RE = re.compile(r"\n{3,}")
 

@@ -247,6 +247,7 @@ def _commit_to_excel(
     workbook_path: str,
     row: int,
     approved_mappings: list[dict],
+    page_url: str = "",
 ) -> dict:
     """
     Write only approved mappings into the workbook.
@@ -266,6 +267,8 @@ def _commit_to_excel(
 
     written = []
     skipped = []
+    tmp_read  = None
+    tmp_write = None
 
     try:
         # ── Step 1: read from a shadow copy so file lock doesn't block ────────
@@ -357,9 +360,9 @@ def _commit_to_excel(
 
     except Exception as exc:
         # Clean up any leftover temp files
-        for tmp in [getattr(tmp_read, "name", None), getattr(tmp_write, "name", None)]:
-            if tmp:
-                Path(tmp).unlink(missing_ok=True)
+        for tmp_obj in [tmp_read, tmp_write]:
+            if tmp_obj is not None:
+                Path(tmp_obj.name).unlink(missing_ok=True)
         return {"error": str(exc)}
 
 

@@ -45,7 +45,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from backend.agent.orchestrator import handle_page_load, handle_user_approval
 from backend.auth import (
-    init_users_table, register_user, login_user, get_current_user, get_user_by_id
+    init_users_collection, register_user, login_user, get_current_user, get_user_by_id
 )
 from backend.db.history import (
     init_db, get_history, get_last_commit, mark_undone,
@@ -77,8 +77,8 @@ _WEBAPP_DIST = Path(__file__).parent.parent / "webapp" / "dist"
 async def lifespan(app: FastAPI):
     logger.info("SheetPilot AI backend starting up...")
     init_db()
-    init_users_table()
-    logger.info("History DB + Users table initialised.")
+    init_users_collection()
+    logger.info("MongoDB collections + indexes initialised.")
 
     def _warm():
         from backend.rag.embedder import embed_texts
@@ -94,6 +94,8 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Groq API: %s", status["message"])
     yield
+    from backend.db.mongodb import close_db
+    close_db()
     logger.info("SheetPilot AI shutting down.")
 
 
@@ -166,7 +168,12 @@ async def dashboard_recent(limit: int = 10):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/workbooks", tags=["Workbooks"])
-async def workbooks():
+@app.get("/api/workbooks", tags=["Workbooks"])
+async def workbooks(request: Request):
+    if "text/html" in request.headers.get("accept", "") and not request.url.path.startswith("/api/"):
+        index = _WEBAPP_DIST / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
     return {"workbooks": get_workbooks_summary()}
 
 
@@ -175,12 +182,19 @@ async def workbooks():
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/history", tags=["History"])
-async def history(workbook_path: Optional[str] = None, limit: int = 50):
+@app.get("/api/history", tags=["History"])
+async def history(request: Request, workbook_path: Optional[str] = None, limit: int = 50):
+    if "text/html" in request.headers.get("accept", "") and not request.url.path.startswith("/api/"):
+        index = _WEBAPP_DIST / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
     return {"history": get_history(workbook_path, limit)}
 
 
 @app.get("/history/search", tags=["History"])
+@app.get("/api/history/search", tags=["History"])
 async def history_search(
+    request: Request,
     q: str = "",
     workbook_path: str = "",
     page_url: str = "",
@@ -189,6 +203,10 @@ async def history_search(
     limit: int = 25,
     offset: int = 0,
 ):
+    if "text/html" in request.headers.get("accept", "") and not request.url.path.startswith("/api/"):
+        index = _WEBAPP_DIST / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
     return search_history(
         query=q,
         workbook_path=workbook_path,

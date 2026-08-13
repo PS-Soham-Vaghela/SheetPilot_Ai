@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const BACKEND    = "http://127.0.0.1:8000";
+  let BACKEND      = "http://127.0.0.1:8000";
   const ROOT_ID    = "sheetpilot-root";
 
   // ── Guard: already injected → just toggle ────────────────────────────────
@@ -20,8 +20,6 @@
   // ─────────────────────────────────────────────────────────────────────────
   const style = document.createElement("style");
   style.textContent = `
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
-
   /* ── Root container ── */
   #sheetpilot-root{
     position:fixed;top:0;left:0;width:0;height:0;
@@ -37,7 +35,7 @@
     display:flex;flex-direction:column;
     border-radius:16px;
     overflow:hidden;
-    font-family:'Space Grotesk',system-ui,-apple-system,sans-serif;font-size:13px;
+    font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:13px;
     color:#111827;
     user-select:none;
     background:#ffffff;
@@ -360,10 +358,14 @@
             <label class="sp-lbl">Active Row</label>
             <div class="sp-row-ctrl">
               <button id="sp-row-dec" class="sp-row-btn">−</button>
-              <input id="sp-rn" class="sp-inp" type="number" value="2" min="1"
+              <input id="sp-rn" class="sp-inp" type="number" value="2" min="2"
                 style="text-align:center;font-weight:600;font-size:13px;"/>
               <button id="sp-row-inc" class="sp-row-btn">+</button>
             </div>
+          </div>
+          <div style="flex: 1;">
+            <label class="sp-lbl">Backend Server URL</label>
+            <input id="sp-be" class="sp-inp" type="text" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000" style="font-size:11px;"/>
           </div>
         </div>
       </div>
@@ -407,6 +409,7 @@
   const minBtn   = document.getElementById("sp-min");
   const wbInp    = document.getElementById("sp-wb");
   const rnInp    = document.getElementById("sp-rn");
+  const beInp    = document.getElementById("sp-be");
   const analyzeB = document.getElementById("sp-analyze");
   const body     = document.getElementById("sp-body");
   const bar      = document.getElementById("sp-bar");
@@ -421,22 +424,30 @@
   // ─────────────────────────────────────────────────────────────────────────
   // SETTINGS
   // ─────────────────────────────────────────────────────────────────────────
-  chrome.storage.local.get(["sp_wb","sp_rn"], (r) => {
+  chrome.storage.local.get(["sp_wb","sp_rn","sp_backend_url"], (r) => {
     if (r.sp_wb) wbInp.value = r.sp_wb;
     if (r.sp_rn) rnInp.value = r.sp_rn;
+    if (r.sp_backend_url) {
+      BACKEND = r.sp_backend_url;
+      beInp.value = r.sp_backend_url;
+    }
     loadColumns();   // auto-load columns on startup if path is already saved
   });
-  function save() { chrome.storage.local.set({sp_wb: wbInp.value, sp_rn: rnInp.value}); }
+  function save() {
+    chrome.storage.local.set({
+      sp_wb: wbInp.value,
+      sp_rn: rnInp.value,
+      sp_backend_url: beInp.value.trim() || "http://127.0.0.1:8000"
+    });
+  }
 
-  // Save immediately on any change so row is never lost
-  // On workbook path change: wipe stale columns + manual, re-fetch fresh
+  // Save immediately on any change so settings are persistent
   wbInp.addEventListener("change", () => {
     save();
     S.columns = [];
     S.manual  = {};
     loadColumns();
   });
-  // Also trigger on Enter key in workbook input
   wbInp.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       save();
@@ -444,6 +455,12 @@
       S.manual  = {};
       loadColumns();
     }
+  });
+  beInp.addEventListener("change", () => {
+    BACKEND = beInp.value.trim() || "http://127.0.0.1:8000";
+    save();
+    health();
+    loadColumns();
   });
   rnInp.addEventListener("change", () => { save(); loadColumns(); });
   rnInp.addEventListener("input",  save);
@@ -454,8 +471,10 @@
     const inc = document.getElementById("sp-row-inc");
     if (dec) dec.addEventListener("click", () => {
       const v = parseInt(rnInp.value, 10);
-      if (v > 2) { rnInp.value = v - 1; save();
-        S.manual = {}; loadColumns(); }
+      if (v > 2) {
+        rnInp.value = v - 1; save();
+        S.manual = {}; loadColumns();
+      }
     });
     if (inc) inc.addEventListener("click", () => {
       rnInp.value = (parseInt(rnInp.value, 10) || 2) + 1; save();
@@ -550,39 +569,6 @@
   function loadColumns() {
     clearTimeout(_loadTimer);
     _loadTimer = setTimeout(_doLoadColumns, 300);
-  }
-
-  async function _doLoadColumns() {
-    const wb  = wbInp.value.trim();
-    const row = parseInt(rnInp.value, 10) || 2;
-    if (!wb) { S.columns = []; if (S.screen==="idle") render(); return; }
-    try {
-      const res = await fetch(
-        `${BACKEND}/schema?workbook_path=${encodeURIComponent(wb)}&active_row=${row}`
-      );
-      if (!res.ok) { S.columns = []; if (S.screen==="idle") render(); return; }
-      const d = await res.json();
-
-      // ONLY store column headers — never use cell values as column names
-      S.columns = (d.columns || []).filter(c => c && typeof c === "string");
-
-      // Only pre-fill if user hasn't typed anything yet in this session
-      // AND only fill values for columns that already exist in the schema
-      if (d.current_row_data && Object.keys(S.manual).length === 0) {
-        S.columns.forEach(col => {
-          const existing = d.current_row_data[col];
-          if (existing && String(existing).trim()) {
-            S.manual[col] = String(existing);
-          }
-        });
-      }
-
-      if (S.screen === "idle") render();
-    } catch (e) {
-      console.error("[SheetPilot] loadColumns failed:", e);
-      S.columns = [];
-      if (S.screen === "idle") render();
-    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -743,7 +729,7 @@
     const prevManual = {...S.manual};
     const prevCols   = [...S.columns];
     S = {screen:"loading", proposals:null, edited:{}, manual:prevManual, columns:prevCols, err:"", count:0};
-    render(); analyzeB.disabled = true;
+    renderLoadingWithStatus("Analyzing page…"); analyzeB.disabled = true;
 
     try {
       const pageText = extractText();
@@ -796,7 +782,8 @@
 
     approveB.disabled = true; approveB.textContent = "Writing…";
     try {
-      const res = await fetch(`${BACKEND}/commit?workbook_path=${encodeURIComponent(wb)}`, {
+      const pageUrl = window.location.href;
+      const res = await fetch(`${BACKEND}/commit?workbook_path=${encodeURIComponent(wb)}&page_url=${encodeURIComponent(pageUrl)}`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({row, approved_mappings: maps})
       });
@@ -843,7 +830,7 @@
   // ─────────────────────────────────────────────────────────────────────────
   function extractText() {
     const SKIP  = new Set(["SCRIPT","STYLE","NOSCRIPT","IFRAME","SVG","CANVAS","HEAD","TEMPLATE",
-                           "sheetpilot-root"]);
+                           "NAV","FOOTER","ASIDE","sheetpilot-root"]);
     const BLOCK = new Set(["P","DIV","SECTION","H1","H2","H3","H4","H5","H6","LI","TR","BLOCKQUOTE"]);
 
     // ── Structured metadata block (prepended — LLM finds it first) ───────────
@@ -868,6 +855,15 @@
     ["description","keywords","author"].forEach(name => {
       const m = document.querySelector('meta[name="' + name + '"]');
       if (m && m.content) metaParts.push("Meta " + name + ": " + m.content);
+    });
+
+    // Form inputs and selected values (captures form data on web pages)
+    document.querySelectorAll("input[value], select").forEach(inp => {
+      const label = inp.labels?.[0]?.textContent?.trim() || inp.name || inp.id;
+      const val   = inp.value?.trim();
+      if (label && val && val.length < 100) {
+        metaParts.push("Form Field (" + label + "): " + val);
+      }
     });
 
     // Schema.org JSON-LD (extremely reliable structured data)
@@ -928,13 +924,15 @@
     // Structured metadata first (most reliable), then body text
     const structured = metaParts.join("\n");
     const body       = bodyParts.join("").replace(/\n{3,}/g,"\n\n").trim();
-    return (structured + "\n\n--- PAGE BODY ---\n" + body).trim();
+    const combined   = (structured + "\n\n--- PAGE BODY ---\n" + body).trim();
+    const MAX_CHARS  = 15000;
+    return combined.length > MAX_CHARS ? combined.slice(0, MAX_CHARS) + "\n\n[Content truncated at 15,000 chars for optimal performance]" : combined;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // TOGGLE from toolbar
+  // TOGGLE from toolbar & MESSAGE RELAY
   // ─────────────────────────────────────────────────────────────────────────
-  chrome.runtime.onMessage.addListener(msg => {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "TOGGLE_OVERLAY") {
       const isHidden = widget.style.display === "none";
       widget.style.display = isHidden ? "flex" : "none";
@@ -943,6 +941,8 @@
         S.manual  = {};
         loadColumns();
       }
+    } else if (msg.type === "GET_PAGE_TEXT_INTERNAL") {
+      sendResponse({ text: extractText(), url: location.href });
     }
   });
 
@@ -1012,8 +1012,8 @@
     }
   }
 
-  // Patch _doLoadColumns to use sheet and inject selector
-  const _origDoLoad = _doLoadColumns;
+  // _doLoadColumns is defined once below (enhanced version with multi-sheet,
+  // inline validation, and semantic map — replaces the old simple version).
   async function _doLoadColumns() {
     const wb  = wbInp.value.trim();
     const row = parseInt(rnInp.value, 10) || 2;
