@@ -37,10 +37,43 @@ server = Server("sheetpilot-excel")
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: load workbook safely
 # ─────────────────────────────────────────────────────────────────────────────
-def _load_workbook(workbook_path: str, read_only: bool = False):
+def _resolve_path(workbook_path: str) -> Path:
+    if not workbook_path:
+        default_p = Path(__file__).parent.parent.parent / "sample_data" / "vendor_invoice.xlsx"
+        if default_p.exists():
+            return default_p
+        raise FileNotFoundError("No workbook path specified.")
+
     path = Path(workbook_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Workbook not found: {workbook_path}")
+    if path.exists():
+        return path
+
+    root_dir = Path(__file__).parent.parent.parent
+    # Try relative to project root
+    candidate = root_dir / workbook_path.lstrip("/\\")
+    if candidate.exists():
+        return candidate
+
+    # Try in sample_data
+    candidate = root_dir / "sample_data" / path.name
+    if candidate.exists():
+        return candidate
+
+    # Try in uploads
+    candidate = root_dir / "uploads" / path.name
+    if candidate.exists():
+        return candidate
+
+    if "vendor_invoice" in workbook_path.lower():
+        candidate = root_dir / "sample_data" / "vendor_invoice.xlsx"
+        if candidate.exists():
+            return candidate
+
+    raise FileNotFoundError(f"Workbook not found on server: {workbook_path}")
+
+
+def _load_workbook(workbook_path: str, read_only: bool = False):
+    path = _resolve_path(workbook_path)
     try:
         return openpyxl.load_workbook(path, read_only=read_only, data_only=True)
     except PermissionError:

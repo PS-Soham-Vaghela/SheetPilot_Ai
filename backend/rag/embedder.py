@@ -1,12 +1,16 @@
 """
-embedder.py — wraps sentence-transformers to produce dense embeddings.
+embedder.py — wraps sentence-transformers or lightweight fast vectorizer.
 
-Model: all-MiniLM-L6-v2 (22 MB, 384-dim, fast on CPU, good semantic quality)
-The model is loaded once at import time and reused for all requests (singleton).
+Optimized for cloud deployment (Render free tier 512MB RAM):
+Uses lightweight fast hashing embeddings if torch is unavailable or USE_LIGHTWEIGHT_RAG is set,
+avoiding Out-Of-Memory crashes.
 """
 
+import hashlib
 import logging
+import math
 import os
+import re
 from functools import lru_cache
 from typing import Union
 
@@ -15,55 +19,74 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+USE_LIGHTWEIGHT: bool = os.getenv("USE_LIGHTWEIGHT_RAG", "true").lower() in ("true", "1", "yes")
 
 
-# ── Singleton model loader ────────────────────────────────────────────────────
+# ── Lightweight 384-dim feature vectorizer (zero PyTorch RAM) ─────────────────
+def _lightweight_embed(texts: list[str], dim: int = 384) -> np.ndarray:
+    """Fast, deterministic feature-hashing embedding. 0MB RAM overhead."""
+    if not texts:
+        return np.empty((0, dim), dtype=np.float32)
+
+    vecs = np.zeros((len(texts), dim), dtype=np.float32)
+    for i, text in enumerate(texts):
+        tokens = re.findall(r"\b\w+\b", text.lower())
+        if not tokens:
+            continue
+        for tok in tokens:
+            h = int(hashlib.md5(tok.encode()).hexdigest(), 16)
+            idx = h % dim
+            sign = 1.0 if ((h >> 8) & 1) else -1.0
+            vecs[i, idx] += sign
+        # L2-normalize
+        norm = np.linalg.norm(vecs[i])
+        if norm > 0:
+            vecs[i] /= norm
+    return vecs
+
+
+# ── SentenceTransformer loader (used only if explicitly enabled) ──────────────
 @lru_cache(maxsize=1)
 def _get_model():
-    """Load and cache the SentenceTransformer model (loaded once per process)."""
-    from sentence_transformers import SentenceTransformer
-
-    logger.info("Loading embedding model: %s", EMBEDDING_MODEL_NAME)
-    model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    logger.info("Embedding model loaded. Embedding dim: %d", model.get_sentence_embedding_dimension())
-    return model
+    if USE_LIGHTWEIGHT:
+        return None
+    try:
+        from sentence_transformers import SentenceTransformer
+        logger.info("Loading embedding model: %s", EMBEDDING_MODEL_NAME)
+        model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        logger.info("Embedding model loaded. Dim: %d", model.get_sentence_embedding_dimension())
+        return model
+    except Exception as exc:
+        logger.warning("Could not load sentence_transformers (%s), using lightweight vectorizer.", exc)
+        return None
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 def embed_texts(texts: list[str]) -> np.ndarray:
-    """
-    Encode a list of strings into a 2-D numpy array of shape (N, 384).
-
-    Args:
-        texts: List of strings to embed.
-
-    Returns:
-        numpy array of float32 embeddings, shape (len(texts), embedding_dim).
-    """
     if not texts:
         return np.empty((0, 384), dtype=np.float32)
 
     model = _get_model()
-    embeddings = model.encode(
-        texts,
-        convert_to_numpy=True,
-        normalize_embeddings=True,   # L2-normalised → cosine sim = dot product
-        show_progress_bar=False,
-        batch_size=32,
-    )
-    return embeddings.astype(np.float32)
+    if model is not None:
+        try:
+            embeddings = model.encode(
+                texts,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+                batch_size=16,
+            )
+            return embeddings.astype(np.float32)
+        except Exception as exc:
+            logger.warning("Dense embedding failed (%s), falling back to lightweight.", exc)
+
+    return _lightweight_embed(texts, dim=384)
 
 
 def embed_query(query: str) -> np.ndarray:
-    """
-    Encode a single query string. Returns shape (384,).
-
-    Separate from embed_texts so the retriever can call it cleanly.
-    """
     result = embed_texts([query])
     return result[0]
 
 
 def embedding_dim() -> int:
-    """Return the embedding dimension for the loaded model."""
-    return _get_model().get_sentence_embedding_dimension()
+    return 384

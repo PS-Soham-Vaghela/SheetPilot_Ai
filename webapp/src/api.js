@@ -50,6 +50,20 @@ export const historyApi = {
 // ── Workbooks ────────────────────────────────────────────────────────────────
 export const workbooksApi = {
   list: () => get('/workbooks'),
+  upload: async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const base = getBaseUrl()
+    const res = await fetch(base + '/upload-workbook', {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || err.error || 'Upload failed')
+    }
+    return res.json()
+  },
 }
 
 // ── Schema / Excel ────────────────────────────────────────────────────────────

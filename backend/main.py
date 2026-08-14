@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -54,7 +54,7 @@ from backend.db.history import (
 )
 from backend.llm.local_model import check_ollama_connection
 from backend.mcp.agent_client import AgentMCPClient
-from backend.mcp.excel_server import _commit_to_excel
+from backend.mcp.excel_server import _commit_to_excel, _resolve_path
 from backend.models.schemas import (
     PageContentRequest, ProposalResponse,
     CommitRequest, CommitResponse, ApprovedMapping,
@@ -79,14 +79,6 @@ async def lifespan(app: FastAPI):
     init_db()
     init_users_collection()
     logger.info("MongoDB collections + indexes initialised.")
-
-    def _warm():
-        from backend.rag.embedder import embed_texts
-        embed_texts(["warm up"])
-        logger.info("Embedding model warmed up.")
-
-    loop = _asyncio.get_event_loop()
-    loop.run_in_executor(_TPE(max_workers=1), _warm)
 
     status = check_ollama_connection()
     if status["ok"]:
@@ -443,6 +435,23 @@ class ChatWorkbookRequest(BaseModel):
     query: str
 
 
+@app.post("/upload-workbook", tags=["Workbooks"])
+async def upload_workbook(file: UploadFile = File(...)):
+    """Upload an Excel (.xlsx) or CSV (.csv) workbook to the server."""
+    uploads_dir = Path(__file__).parent.parent / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    file_path = uploads_dir / file.filename
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    return {
+        "success": True,
+        "filename": file.filename,
+        "workbook_path": f"./uploads/{file.filename}",
+        "message": f"Uploaded {file.filename} successfully.",
+    }
+
+
 @app.post("/chat/workbook", tags=["Chat"])
 async def chat_workbook(request: ChatWorkbookRequest):
     logger.info("POST /chat/workbook query=%s workbook=%s", request.query, request.workbook_path)
@@ -451,9 +460,10 @@ async def chat_workbook(request: ChatWorkbookRequest):
         from backend.rag.retriever import index_page, search
         from backend.llm.local_model import chat
         
-        path = Path(request.workbook_path)
-        if not path.exists():
-            raise HTTPException(status_code=404, detail=f"Workbook not found at: {request.workbook_path}")
+        try:
+            path = _resolve_path(request.workbook_path)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
             
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
         row_texts = []
@@ -477,24 +487,29 @@ async def chat_workbook(request: ChatWorkbookRequest):
                     row_texts.append(row_desc)
                     
         if not row_texts:
-            return {"response": "The workbook appears to be empty or has no columns."}
+            return {"response": "The workbook appears to be empty or has no data rows."}
             
         workbook_text = "\n\n".join(row_texts)
-        index_page(page_text=workbook_text, page_url=request.workbook_path)
-        
-        # Search relevant context
-        passages = search(query=request.query, page_url=request.workbook_path, k=10)
-        
-        prompt = (
-            f"The user is asking a question about their Excel workbook.\n"
-            f"Here are the most relevant rows retrieved from the spreadsheet:\n\n"
-        )
-        for p in passages:
-            prompt += f"- {p.text}\n"
-        prompt += (
-            f"\nUser Question: {request.query}\n"
-            f"Please answer the user's question accurately using only the spreadsheet data provided above. If the data does not contain the answer, say so."
-        )
+        if len(workbook_text) < 8000:
+            prompt = (
+                f"The user is asking a question about their Excel workbook '{path.name}'.\n"
+                f"Here is the complete spreadsheet data:\n\n{workbook_text}\n\n"
+                f"User Question: {request.query}\n"
+                f"Please answer the user's question accurately and concisely using only the spreadsheet data provided above."
+            )
+        else:
+            index_page(page_text=workbook_text, page_url=str(path))
+            passages = search(query=request.query, page_url=str(path), k=10)
+            prompt = (
+                f"The user is asking a question about their Excel workbook '{path.name}'.\n"
+                f"Here are the most relevant rows retrieved from the spreadsheet:\n\n"
+            )
+            for p in passages:
+                prompt += f"- {p.text}\n"
+            prompt += (
+                f"\nUser Question: {request.query}\n"
+                f"Please answer the user's question accurately and concisely using only the spreadsheet data provided above."
+            )
         
         llm_response = chat(prompt)
         return {"response": llm_response}
