@@ -17,8 +17,8 @@ export default function Dashboard() {
   const [chatLoading, setChatLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
-  const defaultWb = localStorage.getItem('sp_default_wb') || ''
-  const activeWb = defaultWb || (recent.length > 0 ? recent[0].workbook_path : '')
+  const defaultWb = localStorage.getItem('sp_default_wb') || './sample_data/vendor_invoice.xlsx'
+  const activeWb = localStorage.getItem('sp_default_wb') || (recent.length > 0 ? recent[0].workbook_path : './sample_data/vendor_invoice.xlsx')
 
   useEffect(() => {
     dashboardApi.recent(8)

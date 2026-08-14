@@ -12,7 +12,7 @@ export default function Analyze() {
   const initialUrl = searchParams.get('url') || ''
 
   const [url,        setUrl]        = useState(initialUrl)
-  const [wbPath,     setWbPath]     = useState(localStorage.getItem('sp_default_wb') || '')
+  const [wbPath,     setWbPath]     = useState(localStorage.getItem('sp_default_wb') || './sample_data/vendor_invoice.xlsx')
   const [row,        setRow]        = useState(2)
   const [loading,    setLoading]    = useState(false)
   const [proposals,  setProposals]  = useState(null)

@@ -1,11 +1,19 @@
-/* Centralized API client — respects custom backend URL setting */
-
-const savedBase = localStorage.getItem('sp_backend_url') || ''
-const BASE = savedBase ? savedBase.replace(/\/$/, '') : (import.meta.env.VITE_API_BASE || '')
+function getBaseUrl() {
+  const savedBase = (localStorage.getItem('sp_backend_url') || '').trim()
+  const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  
+  // If saved URL is pointing to localhost but we are deployed in production, prioritize VITE_API_BASE
+  if (savedBase && (!savedBase.includes('localhost') && !savedBase.includes('127.0.0.1') || isLocalHost)) {
+    return savedBase.replace(/\/$/, '')
+  }
+  
+  return (import.meta.env.VITE_API_BASE || savedBase || '').replace(/\/$/, '')
+}
 
 async function request(method, path, body = null) {
   const headers = { 'Content-Type': 'application/json' }
-  const res = await fetch(BASE + path, {
+  const base = getBaseUrl()
+  const res = await fetch(base + path, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,

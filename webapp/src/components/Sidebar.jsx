@@ -6,10 +6,21 @@ export default function Sidebar() {
   const [backendOk, setBackendOk] = useState(null)
 
   useEffect(() => {
-    systemApi.health()
-      .then(() => setBackendOk(true))
-      .catch(() => setBackendOk(false))
-  }, [])
+    let active = true
+    const check = () => {
+      systemApi.health()
+        .then(() => { if (active) setBackendOk(true) })
+        .catch(() => { if (active) setBackendOk(false) })
+    }
+
+    check()
+    // Poll every 8 seconds if offline/checking, or every 30 seconds if online
+    const interval = setInterval(check, backendOk ? 30000 : 8000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [backendOk])
 
   return (
     <aside className="sidebar">
