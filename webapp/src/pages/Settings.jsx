@@ -4,8 +4,8 @@ import { systemApi } from '../api.js'
 
 export default function Settings() {
   const toast = useToast()
-  const [defaultWb,  setDefaultWb]  = useState(localStorage.getItem('sp_default_wb') || '')
-  const [backendUrl, setBackendUrl]  = useState(localStorage.getItem('sp_backend_url') || 'http://localhost:8000')
+  const [defaultWb,  setDefaultWb]  = useState(localStorage.getItem('sp_default_wb') || './sample_data/vendor_invoice.xlsx')
+  const [backendUrl, setBackendUrl]  = useState(localStorage.getItem('sp_backend_url') || import.meta.env.VITE_API_BASE || '')
   const [health,     setHealth]      = useState(null)
   const [checking,   setChecking]    = useState(false)
 
