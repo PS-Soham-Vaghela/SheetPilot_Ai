@@ -235,9 +235,13 @@ async def analyze_url(request: AnalyzeURLRequest):
 
     try:
         async with httpx.AsyncClient(
-            timeout=15.0,
+            timeout=12.0,
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 SheetPilotBot/3.0"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
         ) as client:
             resp = await client.get(request.url)
             resp.raise_for_status()
@@ -266,6 +270,16 @@ async def analyze_url(request: AnalyzeURLRequest):
             meta_parts.append(f"{h.name.upper()}: {t}")
 
     body_text = soup.get_text(separator=" ", strip=True)
+
+    # Bot protection / empty page check
+    title_text = soup.title.get_text().strip().lower() if soup.title else ""
+    check_text = (title_text + " " + body_text[:600]).lower()
+    if len(body_text) < 120 or "just a moment..." in check_text or "verify you are human" in check_text or "access denied" in check_text or "cloudflare" in check_text and "challenge" in check_text:
+        raise HTTPException(
+            status_code=422,
+            detail="Failed to fetch URL: This website blocked automated scraping or requires verification. Please paste page text manually."
+        )
+
     page_text = "\n".join(meta_parts) + "\n\n--- PAGE BODY ---\n" + body_text[:8000]
 
     try:
@@ -452,6 +466,35 @@ async def upload_workbook(file: UploadFile = File(...)):
     }
 
 
+@app.get("/list-uploads", tags=["Workbooks"])
+async def list_uploads():
+    """List all uploaded and sample workbook files currently available on the server."""
+    root_dir = Path(__file__).parent.parent
+    uploads_dir = root_dir / "uploads"
+    sample_dir = root_dir / "sample_data"
+    
+    files = []
+    if uploads_dir.exists():
+        for f in sorted(uploads_dir.glob("*.*"), key=lambda x: x.stat().st_mtime, reverse=True):
+            if f.suffix.lower() in (".xlsx", ".csv", ".xls"):
+                files.append({
+                    "filename": f.name,
+                    "workbook_path": f"./uploads/{f.name}",
+                    "size_bytes": f.stat().st_size,
+                    "type": "uploaded",
+                })
+    if sample_dir.exists():
+        for f in sample_dir.glob("*.*"):
+            if f.suffix.lower() in (".xlsx", ".csv", ".xls"):
+                files.append({
+                    "filename": f.name,
+                    "workbook_path": f"./sample_data/{f.name}",
+                    "size_bytes": f.stat().st_size,
+                    "type": "sample",
+                })
+    return {"files": files}
+
+
 @app.get("/download-workbook", tags=["Workbooks"])
 async def download_workbook(workbook_path: str):
     """Download the updated .xlsx / .csv spreadsheet from the server."""
@@ -556,20 +599,20 @@ async def commit(request: CommitRequest, workbook_path: str,
 
 class UndoRequest(BaseModel):
     workbook_path: str
-    history_id: Optional[int] = None
+    history_id: Optional[str] = None
 
 
 @app.post("/undo", tags=["History"])
 async def undo(request: UndoRequest):
     if request.history_id:
         records = [r for r in get_history(request.workbook_path, 200)
-                   if r["id"] == request.history_id]
+                   if str(r["id"]) == str(request.history_id)]
     else:
         last = get_last_commit(request.workbook_path)
         records = [last] if last else []
 
     if not records or records[0] is None:
-        raise HTTPException(status_code=404, detail="No commit found to undo.")
+        raise HTTPException(status_code=404, detail="No commit record found to undo.")
 
     record = records[0]
     fields_json = json.loads(record["fields_json"])
@@ -579,6 +622,15 @@ async def undo(request: UndoRequest):
     ]
     if not restore:
         restore = [{"field": f["field"], "value": ""} for f in fields_json]
+
+    # Verify workbook exists on server before attempting commit
+    try:
+        _resolve_path(request.workbook_path)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workbook '{request.workbook_path}' is not present on the server. Re-upload it on the Analyze page to revert changes."
+        )
 
     result = _commit_to_excel(
         workbook_path=request.workbook_path,

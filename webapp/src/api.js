@@ -50,6 +50,7 @@ export const historyApi = {
 // ── Workbooks ────────────────────────────────────────────────────────────────
 export const workbooksApi = {
   list: () => get('/workbooks'),
+  listUploads: () => get('/list-uploads'),
   upload: async (file) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -77,6 +78,8 @@ export const excelApi = {
 export const analyzeApi = {
   fromUrl: (url, workbookPath, activeRow, worksheetName = null) =>
     post('/analyze-url', { url, workbook_path: workbookPath, active_row: activeRow, worksheet_name: worksheetName }),
+  fromText: (pageText, pageUrl, workbookPath, activeRow, worksheetName = null) =>
+    post('/analyze', { page_text: pageText, page_url: pageUrl, workbook_path: workbookPath, active_row: activeRow, worksheet_name: worksheetName }),
 }
 
 // ── Commit / Undo ─────────────────────────────────────────────────────────────
@@ -84,7 +87,7 @@ export const commitApi = {
   approve: (workbookPath, row, mappings, pageUrl = '') =>
     post(`/commit?workbook_path=${encodeURIComponent(workbookPath)}${pageUrl ? `&page_url=${encodeURIComponent(pageUrl)}` : ''}`, { row, approved_mappings: mappings }),
   undo: (workbookPath, historyId = null) =>
-    post('/undo', { workbook_path: workbookPath, history_id: historyId }),
+    post('/undo', { workbook_path: workbookPath, history_id: historyId ? String(historyId) : null }),
 }
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -97,4 +100,3 @@ export const chatApi = {
   workbook: (workbookPath, query) =>
     post('/chat/workbook', { workbook_path: workbookPath, query }),
 }
-

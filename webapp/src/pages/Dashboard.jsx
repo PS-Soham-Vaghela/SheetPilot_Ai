@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { dashboardApi, chatApi } from '../api.js'
+import { dashboardApi, chatApi, workbooksApi } from '../api.js'
 
 export default function Dashboard() {
   const navigate  = useNavigate()
@@ -8,6 +8,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [urlInput, setUrlInput] = useState('')
   const [activeTab, setActiveTab] = useState('sync') // 'sync' | 'chat'
+  
+  // Available server workbooks
+  const [serverFiles, setServerFiles] = useState([])
   
   // Chat state
   const [chatInput, setChatInput] = useState('')
@@ -18,21 +21,47 @@ export default function Dashboard() {
   const messagesEndRef = useRef(null)
 
   const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-  const savedWb = localStorage.getItem('sp_default_wb')
-  const validRecent = recent.find(r => r.workbook_path && (!isCloud || !r.workbook_path.match(/^[a-zA-Z]:/)))?.workbook_path
-  const activeWb = (savedWb && (!isCloud || !savedWb.match(/^[a-zA-Z]:/))) ? savedWb : (validRecent || './sample_data/vendor_invoice.xlsx')
+  const savedWb = localStorage.getItem('sp_cloud_wb') || localStorage.getItem('sp_default_wb')
+  
+  const [selectedWb, setSelectedWb] = useState(savedWb || './sample_data/vendor_invoice.xlsx')
 
   useEffect(() => {
     dashboardApi.recent(8)
       .then(r => setRecent(r.recent || []))
       .catch(() => setRecent([]))
       .finally(() => setLoading(false))
-  }, [])
+
+    // Fetch available server files
+    workbooksApi.listUploads()
+      .then(res => {
+        const files = res.files || []
+        setServerFiles(files)
+        if (files.length > 0) {
+          // If current selection is invalid or local windows path in cloud
+          const isInvalidLocal = isCloud && selectedWb?.match(/^[a-zA-Z]:/)
+          const fileExists = files.some(f => f.workbook_path === selectedWb)
+          if (!fileExists || isInvalidLocal) {
+            const firstUpload = files.find(f => f.type === 'uploaded') || files[0]
+            if (firstUpload) {
+              setSelectedWb(firstUpload.workbook_path)
+              localStorage.setItem('sp_cloud_wb', firstUpload.workbook_path)
+            }
+          }
+        }
+      })
+      .catch(() => {})
+  }, [isCloud])
 
   useEffect(() => {
-    // Scroll chat to bottom on new messages
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const handleWbChange = (e) => {
+    const val = e.target.value
+    setSelectedWb(val)
+    localStorage.setItem('sp_cloud_wb', val)
+    localStorage.setItem('sp_default_wb', val)
+  }
 
   const handleAnalyze = (e) => {
     e.preventDefault()
@@ -48,28 +77,38 @@ export default function Dashboard() {
     setChatInput('')
     setMessages(prev => [...prev, { role: 'user', content: userQuery }])
     
-    if (!activeWb) {
+    if (!selectedWb) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Please configure a default workbook path first on the Analyze page or Settings tab to enable spreadsheet chat.'
+        content: 'Please select or upload a workbook first to enable spreadsheet chat.'
       }])
       return
     }
 
     setChatLoading(true)
     try {
-      const data = await chatApi.workbook(activeWb, userQuery)
+      const data = await chatApi.workbook(selectedWb, userQuery)
       if (data.response) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.detail || 'Failed to retrieve answer from the workbook.' }])
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: err.message || 'Connection error. Make sure the backend server is running.' }])
+      const msg = err.message || ''
+      if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '⚠️ This workbook is not found on the server (it may have been lost after a server restart). Please upload your file on the Analyze page.'
+        }])
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: msg || 'Connection error. Make sure the backend server is running.' }])
+      }
     } finally {
       setChatLoading(false)
     }
   }
+
+  const activeWbName = selectedWb ? selectedWb.split(/[\\/]/).pop() : 'No workbook selected'
 
   return (
     <div className="dashboard-container">
@@ -101,6 +140,7 @@ export default function Dashboard() {
             <div className="action-chips">
               <button className="action-chip" onClick={() => navigate('/history')}>View History</button>
               <button className="action-chip" onClick={() => navigate('/workbooks')}>Browse Workbooks</button>
+              <button className="action-chip" onClick={() => navigate('/analyze')}>Analyze URL</button>
               <button className="action-chip" onClick={() => navigate('/settings')}>Settings</button>
             </div>
 
@@ -123,9 +163,27 @@ export default function Dashboard() {
           </>
         ) : (
           <div className="chat-panel">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--bg-card, #f8f9fa)', borderRadius: 'var(--radius-md, 8px)', fontSize: '0.8rem', color: 'var(--text-muted, #666)', marginBottom: 8, border: '1px solid var(--border, #eee)' }}>
-              <span>Spreadsheet: <strong style={{ color: 'var(--text-main, #111)' }}>{activeWb.split(/[\\/]/).pop()}</strong></span>
-              <button className="btn btn-ghost btn-xs" onClick={() => navigate('/settings')} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>Change in Settings</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card, #f8f9fa)', borderRadius: 'var(--radius-md, 8px)', fontSize: '0.8rem', color: 'var(--text-muted, #666)', marginBottom: 8, border: '1px solid var(--border, #eee)', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
+                <span>Spreadsheet:</span>
+                {serverFiles.length > 0 ? (
+                  <select 
+                    value={selectedWb} 
+                    onChange={handleWbChange}
+                    className="inp"
+                    style={{ padding: '2px 8px', fontSize: '0.8rem', height: 28, flex: 1, maxWidth: 260 }}
+                  >
+                    {serverFiles.map(f => (
+                      <option key={f.workbook_path} value={f.workbook_path}>
+                        {f.type === 'uploaded' ? '📁 ' : '📄 '} {f.filename}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <strong style={{ color: 'var(--text-main, #111)' }}>{activeWbName}</strong>
+                )}
+              </div>
+              <button className="btn btn-ghost btn-xs" onClick={() => navigate('/analyze')} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>+ Upload New</button>
             </div>
             <div className="chat-messages">
               {messages.map((m, idx) => (
@@ -144,12 +202,12 @@ export default function Dashboard() {
             <form className="chat-input-bar" onSubmit={handleChatSubmit}>
               <input 
                 type="text" 
-                placeholder={activeWb ? "Ask a question about your workbook..." : "Configure a workbook path first..."}
+                placeholder={selectedWb ? `Ask a question about ${activeWbName}...` : "Upload a workbook first..."}
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                disabled={!activeWb || chatLoading}
+                disabled={!selectedWb || chatLoading}
               />
-              <button type="submit" className="btn btn-primary btn-sm" disabled={!activeWb || chatLoading} style={{ borderRadius: 'var(--radius-full)' }}>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={!selectedWb || chatLoading} style={{ borderRadius: 'var(--radius-full)' }}>
                 Ask
               </button>
             </form>
@@ -194,7 +252,7 @@ export default function Dashboard() {
                 return (
                   <div key={r.id} className="recent-sync-item">
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }} title={r.url}>
+                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }} title={r.page_url}>
                         {hostname}
                       </span>
                       <span style={{ color: 'var(--green)', fontWeight: 600 }}>+{fields} fields</span>

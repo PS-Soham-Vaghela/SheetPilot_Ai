@@ -1,20 +1,49 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { workbooksApi, historyApi } from '../api.js'
+import { useToast } from '../App.jsx'
 import WorkbookCard from '../components/WorkbookCard.jsx'
 import SyncRow from '../components/SyncRow.jsx'
 
 export default function Workbooks() {
+  const toast = useToast()
+  const fileInputRef = useRef(null)
   const [workbooks, setWorkbooks] = useState([])
   const [loading,   setLoading]   = useState(true)
+  const [uploading, setUploading] = useState(false)
   const [selected,  setSelected]  = useState(null)
   const [wbHistory, setWbHistory] = useState([])
   const [wbLoading, setWbLoading] = useState(false)
 
-  useEffect(() => {
+  const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+
+  const loadWorkbooks = () => {
+    setLoading(true)
     workbooksApi.list()
       .then(r => setWorkbooks(r.workbooks || []))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadWorkbooks()
   }, [])
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const res = await workbooksApi.upload(file)
+      localStorage.setItem('sp_cloud_wb', res.workbook_path)
+      localStorage.setItem('sp_default_wb', res.workbook_path)
+      toast.success(`Uploaded ${file.name} successfully!`)
+      loadWorkbooks()
+    } catch (err) {
+      toast.error(`Upload failed: ${err.message}`)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const openWorkbook = async (wb) => {
     setSelected(wb); setWbLoading(true)
@@ -28,18 +57,35 @@ export default function Workbooks() {
 
   if (selected) {
     const name = selected.workbook_path?.split(/[\\/]/).pop() || 'Workbook'
+    const isLocalDrive = selected.workbook_path?.match(/^[a-zA-Z]:/)
+
     return (
       <div>
         <div className="section-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <button className="btn btn-ghost btn-sm" onClick={()=>setSelected(null)} style={{ marginBottom: 8 }}>← Back</button>
-            <h1>{name}</h1>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)} style={{ marginBottom: 8 }}>← Back to Workbooks</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h1>{name}</h1>
+              {isLocalDrive ? (
+                <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>Local Path</span>
+              ) : (
+                <span className="badge badge-active">Cloud Ready</span>
+              )}
+            </div>
             <p style={{ marginTop: 4, wordBreak:'break-all' }}>{selected.workbook_path}</p>
           </div>
-          <a href={workbooksApi.downloadUrl(selected.workbook_path)} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" style={{ marginTop: 32 }}>
-            <svg className="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download .xlsx
-          </a>
+          <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
+            {isLocalDrive && isCloud ? (
+              <button className="btn btn-ghost btn-sm" disabled title="This workbook was created from a local computer path and cannot be downloaded directly from the cloud server.">
+                ⚠️ Local Path (Cannot Download)
+              </button>
+            ) : (
+              <a href={workbooksApi.downloadUrl(selected.workbook_path)} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <svg className="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download .xlsx
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -83,10 +129,16 @@ export default function Workbooks() {
 
   return (
     <div>
-      <div className="section-hdr" style={{ marginBottom: 24 }}>
+      <div className="section-hdr" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1>Workbooks</h1>
           <p style={{ marginTop: 4 }}>{workbooks.length} workbooks tracked</p>
+        </div>
+        <div>
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.csv" style={{ display: 'none' }} />
+          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            {uploading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Uploading…</> : <><svg className="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload .xlsx</>}
+          </button>
         </div>
       </div>
 
@@ -95,7 +147,7 @@ export default function Workbooks() {
       ) : workbooks.length === 0 ? (
         <div className="empty card">
           <span className="empty-icon"><svg className="icon icon-lg" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
-          <p>No workbooks yet. Sync a page from the extension to get started.</p>
+          <p>No workbooks yet. Upload a workbook or analyze a page to get started.</p>
         </div>
       ) : (
         <div className="grid-3">
