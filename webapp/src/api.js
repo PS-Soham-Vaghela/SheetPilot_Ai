@@ -64,6 +64,7 @@ export const workbooksApi = {
     }
     return res.json()
   },
+  downloadUrl: (workbookPath) => `${getBaseUrl()}/download-workbook?workbook_path=${encodeURIComponent(workbookPath)}`,
 }
 
 // ── Schema / Excel ────────────────────────────────────────────────────────────

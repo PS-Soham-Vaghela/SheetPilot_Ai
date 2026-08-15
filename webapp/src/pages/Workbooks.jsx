@@ -30,12 +30,16 @@ export default function Workbooks() {
     const name = selected.workbook_path?.split(/[\\/]/).pop() || 'Workbook'
     return (
       <div>
-        <div className="section-hdr">
+        <div className="section-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <button className="btn btn-ghost btn-sm" onClick={()=>setSelected(null)} style={{ marginBottom: 8 }}>← Back</button>
             <h1>{name}</h1>
             <p style={{ marginTop: 4, wordBreak:'break-all' }}>{selected.workbook_path}</p>
           </div>
+          <a href={workbooksApi.downloadUrl(selected.workbook_path)} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" style={{ marginTop: 32 }}>
+            <svg className="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download .xlsx
+          </a>
         </div>
 
         {/* Stats */}

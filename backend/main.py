@@ -452,6 +452,24 @@ async def upload_workbook(file: UploadFile = File(...)):
     }
 
 
+@app.get("/download-workbook", tags=["Workbooks"])
+async def download_workbook(workbook_path: str):
+    """Download the updated .xlsx / .csv spreadsheet from the server."""
+    try:
+        path = _resolve_path(workbook_path)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Workbook not found on server.")
+        
+    return FileResponse(
+        str(path),
+        filename=path.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @app.post("/chat/workbook", tags=["Chat"])
 async def chat_workbook(request: ChatWorkbookRequest):
     logger.info("POST /chat/workbook query=%s workbook=%s", request.query, request.workbook_path)

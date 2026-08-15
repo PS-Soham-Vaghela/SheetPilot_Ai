@@ -295,9 +295,10 @@ def _commit_to_excel(
     """
     import shutil, tempfile, time
 
-    path = Path(workbook_path)
-    if not path.exists():
-        return {"error": f"Workbook not found: {workbook_path}"}
+    try:
+        path = _resolve_path(workbook_path)
+    except Exception as exc:
+        return {"error": str(exc)}
 
     written = []
     skipped = []
