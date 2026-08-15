@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { analyzeApi, commitApi } from '../api.js'
+import { analyzeApi, commitApi, workbooksApi } from '../api.js'
 import { useToast } from '../App.jsx'
 import FieldBadge from '../components/FieldBadge.jsx'
 
 export default function Analyze() {
   const toast = useToast()
   const location = useLocation()
+  const fileInputRef = useRef(null)
   
   const searchParams = new URLSearchParams(location.search)
   const initialUrl = searchParams.get('url') || ''
@@ -15,6 +16,7 @@ export default function Analyze() {
   const [wbPath,     setWbPath]     = useState(localStorage.getItem('sp_default_wb') || './sample_data/vendor_invoice.xlsx')
   const [row,        setRow]        = useState(2)
   const [loading,    setLoading]    = useState(false)
+  const [uploading,  setUploading]  = useState(false)
   const [proposals,  setProposals]  = useState(null)
   const [values,     setValues]     = useState({})
   const [committing, setCommitting] = useState(false)
@@ -24,6 +26,29 @@ export default function Analyze() {
     const qUrl = new URLSearchParams(location.search).get('url')
     if (qUrl) setUrl(qUrl)
   }, [location.search])
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const res = await workbooksApi.upload(file)
+      setWbPath(res.workbook_path)
+      localStorage.setItem('sp_default_wb', res.workbook_path)
+      toast.success(`Uploaded ${file.name}! Ready to analyze.`)
+    } catch (err) {
+      toast.error(`Upload failed: ${err.message}`)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const setSampleWorkbook = () => {
+    setWbPath('./sample_data/vendor_invoice.xlsx')
+    localStorage.setItem('sp_default_wb', './sample_data/vendor_invoice.xlsx')
+    toast.info('Selected sample vendor invoice workbook.')
+  }
 
   const analyze = async (e) => {
     e?.preventDefault()
@@ -82,12 +107,23 @@ export default function Analyze() {
           <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
             <div style={{ flex:3, minWidth:240 }}>
               <label className="inp-label">Page URL to analyze</label>
-              <input className="inp" type="url" placeholder="https://example.com/page"
+              <input className="inp" type="url" placeholder="https://example.com/invoice-or-product"
                 value={url} onChange={e=>setUrl(e.target.value)} required />
             </div>
-            <div style={{ flex:2, minWidth:200 }}>
-              <label className="inp-label">Excel workbook path</label>
-              <input className="inp" placeholder="C:\Users\...\Book1.xlsx"
+            <div style={{ flex:2, minWidth:240 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <label className="inp-label" style={{ marginBottom: 0 }}>Excel Workbook Path</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button type="button" className="btn btn-ghost btn-xs" onClick={setSampleWorkbook} style={{ fontSize: '0.7rem', padding: '1px 6px' }}>
+                    Use Sample
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ fontSize: '0.7rem', padding: '1px 6px' }}>
+                    {uploading ? 'Uploading…' : '📁 Upload .xlsx'}
+                  </button>
+                </div>
+              </div>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.csv" style={{ display: 'none' }} />
+              <input className="inp" placeholder="./sample_data/vendor_invoice.xlsx"
                 value={wbPath} onChange={e=>{setWbPath(e.target.value); localStorage.setItem('sp_default_wb', e.target.value)}} required />
             </div>
             <div style={{ width:100 }}>

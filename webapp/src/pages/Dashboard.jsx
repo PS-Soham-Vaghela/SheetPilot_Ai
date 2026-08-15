@@ -17,8 +17,10 @@ export default function Dashboard() {
   const [chatLoading, setChatLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
-  const defaultWb = localStorage.getItem('sp_default_wb') || './sample_data/vendor_invoice.xlsx'
-  const activeWb = localStorage.getItem('sp_default_wb') || (recent.length > 0 ? recent[0].workbook_path : './sample_data/vendor_invoice.xlsx')
+  const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+  const savedWb = localStorage.getItem('sp_default_wb')
+  const validRecent = recent.find(r => r.workbook_path && (!isCloud || !r.workbook_path.match(/^[a-zA-Z]:/)))?.workbook_path
+  const activeWb = (savedWb && (!isCloud || !savedWb.match(/^[a-zA-Z]:/))) ? savedWb : (validRecent || './sample_data/vendor_invoice.xlsx')
 
   useEffect(() => {
     dashboardApi.recent(8)
@@ -121,6 +123,10 @@ export default function Dashboard() {
           </>
         ) : (
           <div className="chat-panel">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--bg-card, #f8f9fa)', borderRadius: 'var(--radius-md, 8px)', fontSize: '0.8rem', color: 'var(--text-muted, #666)', marginBottom: 8, border: '1px solid var(--border, #eee)' }}>
+              <span>Spreadsheet: <strong style={{ color: 'var(--text-main, #111)' }}>{activeWb.split(/[\\/]/).pop()}</strong></span>
+              <button className="btn btn-ghost btn-xs" onClick={() => navigate('/settings')} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>Change in Settings</button>
+            </div>
             <div className="chat-messages">
               {messages.map((m, idx) => (
                 <div key={idx} className={`chat-bubble ${m.role}`}>

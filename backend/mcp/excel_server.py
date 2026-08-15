@@ -38,8 +38,9 @@ server = Server("sheetpilot-excel")
 # Helper: load workbook safely
 # ─────────────────────────────────────────────────────────────────────────────
 def _resolve_path(workbook_path: str) -> Path:
+    root_dir = Path(__file__).parent.parent.parent
     if not workbook_path:
-        default_p = Path(__file__).parent.parent.parent / "sample_data" / "vendor_invoice.xlsx"
+        default_p = root_dir / "sample_data" / "vendor_invoice.xlsx"
         if default_p.exists():
             return default_p
         raise FileNotFoundError("No workbook path specified.")
@@ -48,7 +49,6 @@ def _resolve_path(workbook_path: str) -> Path:
     if path.exists():
         return path
 
-    root_dir = Path(__file__).parent.parent.parent
     # Try relative to project root
     candidate = root_dir / workbook_path.lstrip("/\\")
     if candidate.exists():
@@ -64,10 +64,11 @@ def _resolve_path(workbook_path: str) -> Path:
     if candidate.exists():
         return candidate
 
-    if "vendor_invoice" in workbook_path.lower():
-        candidate = root_dir / "sample_data" / "vendor_invoice.xlsx"
-        if candidate.exists():
-            return candidate
+    if "vendor_invoice" in workbook_path.lower() or path.suffix in (".xlsx", ".csv"):
+        sample_default = root_dir / "sample_data" / "vendor_invoice.xlsx"
+        if sample_default.exists():
+            logger.info("Falling back to server sample workbook '%s' for '%s'", sample_default.name, workbook_path)
+            return sample_default
 
     raise FileNotFoundError(f"Workbook not found on server: {workbook_path}")
 
