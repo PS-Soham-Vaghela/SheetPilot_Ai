@@ -42,6 +42,7 @@ In logistics, procurement, e-commerce, recruitment, and accounting, professional
 4. **Human-in-the-Loop Review**: Color-coded confidence badges (High / Medium / Low) and source citations let users review and tweak proposed values before committing.
 5. **Full Audit Trail & 1-Click Rollback**: Every synced row is logged to MongoDB Atlas with field-level diffs, enabling instant 1-click restore/undo.
 6. **Chat Copilot with Spreadsheets**: Ask natural language questions (e.g., *"Which vendor has the highest invoice total?"*) and receive immediate answers grounded in your spreadsheet data.
+<img width="1913" height="954" alt="image" src="https://github.com/user-attachments/assets/1668339d-c3e3-4e08-8d96-d15e4ac7cc32" />
 
 ---
 
