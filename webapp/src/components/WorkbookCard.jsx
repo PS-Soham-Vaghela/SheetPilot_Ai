@@ -35,7 +35,17 @@ export default function WorkbookCard({ wb, onClick }) {
           <div className="wb-stat-lbl">Sheets</div>
         </div>
       </div>
-      <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-3)' }}>Last sync: {ts}</div>
+      <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Last sync: {ts}</span>
+        <a
+          href={`/editor?wb=${encodeURIComponent(wb.workbook_path)}`}
+          onClick={e => { e.stopPropagation() }}
+          className="btn btn-ghost btn-xs"
+          style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+        >
+          ✏️ Open Editor
+        </a>
+      </div>
     </div>
   )
 }

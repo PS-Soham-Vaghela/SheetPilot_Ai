@@ -513,6 +513,209 @@ async def download_workbook(workbook_path: str):
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SPREADSHEET EDITOR ROUTES
+# ══════════════════════════════════════════════════════════════════════════════
+
+from backend.mcp.excel_editor import (
+    get_sheet_data as _editor_get_sheet_data,
+    update_cell as _editor_update_cell,
+    update_batch as _editor_update_batch,
+    add_row as _editor_add_row,
+    delete_row as _editor_delete_row,
+    add_column as _editor_add_column,
+    create_sheet as _editor_create_sheet,
+    create_new_workbook as _editor_create_new_workbook,
+)
+
+
+class UpdateCellRequest(BaseModel):
+    workbook_path: str
+    worksheet_name: Optional[str] = None
+    row: int
+    col: int
+    value: Optional[str] = ""
+
+
+class UpdateBatchRequest(BaseModel):
+    workbook_path: str
+    worksheet_name: Optional[str] = None
+    updates: list[dict]
+
+
+class AddRowRequest(BaseModel):
+    workbook_path: str
+    worksheet_name: Optional[str] = None
+    row_data: Optional[list[str]] = None
+    insert_at_row: Optional[int] = None
+
+
+class DeleteRowRequest(BaseModel):
+    workbook_path: str
+    worksheet_name: Optional[str] = None
+    row_index: int
+
+
+class AddColumnRequest(BaseModel):
+    workbook_path: str
+    worksheet_name: Optional[str] = None
+    column_name: str
+
+
+class CreateSheetRequest(BaseModel):
+    workbook_path: str
+    sheet_name: str
+
+
+class CreateWorkbookRequest(BaseModel):
+    filename: str
+    headers: Optional[list[str]] = None
+    sheet_name: Optional[str] = "Sheet1"
+
+
+@app.get("/workbook/data", tags=["Spreadsheet Editor"])
+@app.get("/api/workbook/data", tags=["Spreadsheet Editor"])
+async def get_workbook_data(
+    workbook_path: str,
+    worksheet_name: Optional[str] = None,
+    page: int = 1,
+    limit: int = 200,
+):
+    """Retrieve sheet data, headers, rows, and dimensions for the in-browser spreadsheet editor."""
+    try:
+        return _editor_get_sheet_data(
+            workbook_path=workbook_path,
+            worksheet_name=worksheet_name,
+            page=page,
+            limit=limit,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error loading spreadsheet data")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/workbook/update-cell", tags=["Spreadsheet Editor"])
+@app.post("/api/workbook/update-cell", tags=["Spreadsheet Editor"])
+async def update_workbook_cell(req: UpdateCellRequest):
+    """Update a single cell value in the spreadsheet."""
+    try:
+        return _editor_update_cell(
+            workbook_path=req.workbook_path,
+            worksheet_name=req.worksheet_name,
+            row=req.row,
+            col=req.col,
+            value=req.value,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error updating cell")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/workbook/update-batch", tags=["Spreadsheet Editor"])
+@app.post("/api/workbook/update-batch", tags=["Spreadsheet Editor"])
+async def update_workbook_batch(req: UpdateBatchRequest):
+    """Update multiple cells in one batch."""
+    try:
+        return _editor_update_batch(
+            workbook_path=req.workbook_path,
+            worksheet_name=req.worksheet_name,
+            updates=req.updates,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error batch updating cells")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/workbook/add-row", tags=["Spreadsheet Editor"])
+@app.post("/api/workbook/add-row", tags=["Spreadsheet Editor"])
+async def add_workbook_row(req: AddRowRequest):
+    """Append or insert a new row in the spreadsheet."""
+    try:
+        return _editor_add_row(
+            workbook_path=req.workbook_path,
+            worksheet_name=req.worksheet_name,
+            row_data=req.row_data,
+            insert_at_row=req.insert_at_row,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error adding row")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/workbook/delete-row", tags=["Spreadsheet Editor"])
+@app.post("/api/workbook/delete-row", tags=["Spreadsheet Editor"])
+async def delete_workbook_row(req: DeleteRowRequest):
+    """Delete a row from the spreadsheet."""
+    try:
+        return _editor_delete_row(
+            workbook_path=req.workbook_path,
+            worksheet_name=req.worksheet_name,
+            row_index=req.row_index,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error deleting row")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/workbook/add-column", tags=["Spreadsheet Editor"])
+@app.post("/api/workbook/add-column", tags=["Spreadsheet Editor"])
+async def add_workbook_column(req: AddColumnRequest):
+    """Add a new column header to the spreadsheet."""
+    try:
+        return _editor_add_column(
+            workbook_path=req.workbook_path,
+            worksheet_name=req.worksheet_name,
+            column_name=req.column_name,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error adding column")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/workbook/create-sheet", tags=["Spreadsheet Editor"])
+@app.post("/api/workbook/create-sheet", tags=["Spreadsheet Editor"])
+async def create_workbook_sheet(req: CreateSheetRequest):
+    """Create a new sheet tab in the spreadsheet."""
+    try:
+        return _editor_create_sheet(
+            workbook_path=req.workbook_path,
+            sheet_name=req.sheet_name,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error creating sheet")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/workbook/create", tags=["Spreadsheet Editor"])
+@app.post("/api/workbook/create", tags=["Spreadsheet Editor"])
+async def create_new_workbook_file(req: CreateWorkbookRequest):
+    """Create a brand new .xlsx workbook file."""
+    try:
+        return _editor_create_new_workbook(
+            filename=req.filename,
+            headers=req.headers,
+            sheet_name=req.sheet_name or "Sheet1",
+        )
+    except Exception as exc:
+        logger.exception("Error creating new workbook")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+
 @app.post("/chat/workbook", tags=["Chat"])
 async def chat_workbook(request: ChatWorkbookRequest):
     logger.info("POST /chat/workbook query=%s workbook=%s", request.query, request.workbook_path)

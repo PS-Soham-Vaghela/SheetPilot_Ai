@@ -10,6 +10,7 @@ export const useToast = () => useContext(ToastCtx)
 import Dashboard from './pages/Dashboard.jsx'
 import History   from './pages/History.jsx'
 import Workbooks from './pages/Workbooks.jsx'
+import Editor    from './pages/Editor.jsx'
 import Analyze   from './pages/Analyze.jsx'
 import Settings  from './pages/Settings.jsx'
 import Layout    from './components/Layout.jsx'
@@ -35,6 +36,7 @@ export default function App() {
           <Routes>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="editor"    element={<Editor />} />
             <Route path="history"   element={<History />} />
             <Route path="workbooks" element={<Workbooks />} />
             <Route path="analyze"   element={<Analyze />} />

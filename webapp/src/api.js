@@ -100,3 +100,24 @@ export const chatApi = {
   workbook: (workbookPath, query) =>
     post('/chat/workbook', { workbook_path: workbookPath, query }),
 }
+
+// ── Spreadsheet Editor ────────────────────────────────────────────────────────
+export const editorApi = {
+  getData: (workbookPath, worksheetName = '', page = 1, limit = 200) =>
+    get(`/workbook/data?workbook_path=${encodeURIComponent(workbookPath)}${worksheetName ? `&worksheet_name=${encodeURIComponent(worksheetName)}` : ''}&page=${page}&limit=${limit}`),
+  updateCell: (workbookPath, worksheetName, row, col, value) =>
+    post('/workbook/update-cell', { workbook_path: workbookPath, worksheet_name: worksheetName, row, col, value: String(value ?? '') }),
+  updateBatch: (workbookPath, worksheetName, updates) =>
+    post('/workbook/update-batch', { workbook_path: workbookPath, worksheet_name: worksheetName, updates }),
+  addRow: (workbookPath, worksheetName = null, rowData = null, insertAtRow = null) =>
+    post('/workbook/add-row', { workbook_path: workbookPath, worksheet_name: worksheetName, row_data: rowData, insert_at_row: insertAtRow }),
+  deleteRow: (workbookPath, worksheetName, rowIndex) =>
+    post('/workbook/delete-row', { workbook_path: workbookPath, worksheet_name: worksheetName, row_index: rowIndex }),
+  addColumn: (workbookPath, worksheetName, columnName) =>
+    post('/workbook/add-column', { workbook_path: workbookPath, worksheet_name: worksheetName, column_name: columnName }),
+  createSheet: (workbookPath, sheetName) =>
+    post('/workbook/create-sheet', { workbook_path: workbookPath, sheet_name: sheetName }),
+  createWorkbook: (filename, headers = null, sheetName = 'Sheet1') =>
+    post('/workbook/create', { filename, headers, sheet_name: sheetName }),
+}
+
