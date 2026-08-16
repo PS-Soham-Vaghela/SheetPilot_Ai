@@ -11,7 +11,10 @@
   // ── Guard: already injected → just toggle ────────────────────────────────
   if (document.getElementById(ROOT_ID)) {
     const w = document.getElementById("sp-widget");
-    if (w) w.style.display = w.style.display === "none" ? "flex" : "none";
+    if (w) {
+      const isHidden = !w.style.display || w.style.display === "none" || window.getComputedStyle(w).display === "none";
+      w.style.display = isHidden ? "flex" : "none";
+    }
     return;
   }
 
@@ -32,7 +35,8 @@
     position:fixed;
     width:360px;
     max-height:90vh;
-    display:flex;flex-direction:column;
+    display:none; /* Start completely hidden until user clicks extension icon */
+    flex-direction:column;
     border-radius:16px;
     overflow:hidden;
     font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:13px;
@@ -339,7 +343,7 @@
   const root = document.createElement("div");
   root.id = ROOT_ID;
   root.innerHTML = `
-    <div id="sp-widget">
+    <div id="sp-widget" style="display:none;">
       <div id="sp-hdr">
         <div id="sp-grip"><span></span><span></span></div>
         <div id="sp-logo-wrap">
@@ -934,12 +938,15 @@
   // ─────────────────────────────────────────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "TOGGLE_OVERLAY") {
-      const isHidden = widget.style.display === "none";
+      const isHidden = !widget.style.display || widget.style.display === "none" || window.getComputedStyle(widget).display === "none";
       widget.style.display = isHidden ? "flex" : "none";
-      if (isHidden && S.screen === "idle") {
-        S.columns = [];
-        S.manual  = {};
-        loadColumns();
+      if (isHidden) {
+        applyPos();
+        if (S.screen === "idle") {
+          S.columns = [];
+          S.manual  = {};
+          loadColumns();
+        }
       }
     } else if (msg.type === "GET_PAGE_TEXT_INTERNAL") {
       sendResponse({ text: extractText(), url: location.href });

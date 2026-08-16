@@ -138,9 +138,10 @@ export default function Dashboard() {
             </div>
 
             <div className="action-chips">
-              <button className="action-chip" onClick={() => navigate('/history')}>View History</button>
+              <button className="action-chip" onClick={() => navigate('/editor')}>✏️ Sheet Editor</button>
+              <button className="action-chip" onClick={() => navigate('/analyze')}>⚡ Analyze URL</button>
               <button className="action-chip" onClick={() => navigate('/workbooks')}>Browse Workbooks</button>
-              <button className="action-chip" onClick={() => navigate('/analyze')}>Analyze URL</button>
+              <button className="action-chip" onClick={() => navigate('/history')}>View History</button>
               <button className="action-chip" onClick={() => navigate('/settings')}>Settings</button>
             </div>
 

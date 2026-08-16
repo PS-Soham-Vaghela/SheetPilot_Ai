@@ -12,10 +12,12 @@ export default function Analyze() {
 
   const searchParams = new URLSearchParams(location.search)
   const initialUrl = searchParams.get('url') || ''
+  const initialRow = searchParams.get('row') ? parseInt(searchParams.get('row'), 10) : 2
+  const initialWb  = searchParams.get('wb') || localStorage.getItem('sp_cloud_wb') || localStorage.getItem('sp_default_wb') || './sample_data/vendor_invoice.xlsx'
 
   const [url,         setUrl]        = useState(initialUrl)
-  const [wbPath,      setWbPath]     = useState(localStorage.getItem('sp_default_wb') || './sample_data/vendor_invoice.xlsx')
-  const [row,         setRow]        = useState(2)
+  const [wbPath,      setWbPath]     = useState(initialWb)
+  const [row,         setRow]        = useState(initialRow)
   const [loading,     setLoading]    = useState(false)
   const [uploading,   setUploading]  = useState(false)
   const [proposals,   setProposals]  = useState(null)
@@ -33,8 +35,13 @@ export default function Analyze() {
   const [pendingAction, setPendingAction] = useState(null) // 'analyze' | null
 
   useEffect(() => {
-    const qUrl = new URLSearchParams(location.search).get('url')
-    if (qUrl) setUrl(qUrl)
+    const params = new URLSearchParams(location.search)
+    const qUrl = params.get('url')
+    const qRow = params.get('row')
+    const qWb  = params.get('wb')
+    if (qUrl !== null) setUrl(qUrl)
+    if (qRow) setRow(parseInt(qRow, 10))
+    if (qWb) setWbPath(qWb)
   }, [location.search])
 
   // ── File upload helpers ──────────────────────────────────────────────────────
@@ -228,7 +235,7 @@ export default function Analyze() {
               </div>
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.csv" style={{ display: 'none' }} />
               <input className="inp" placeholder="./sample_data/vendor_invoice.xlsx"
-                value={wbPath} onChange={e => { setWbPath(e.target.value); localStorage.setItem('sp_default_wb', e.target.value); setWbMissing(false) }} required />
+                value={wbPath} onChange={e => { setWbPath(e.target.value); localStorage.setItem('sp_default_wb', e.target.value); localStorage.setItem('sp_cloud_wb', e.target.value); setWbMissing(false) }} required />
             </div>
             <div style={{ width:100 }}>
               <label className="inp-label">Active row</label>

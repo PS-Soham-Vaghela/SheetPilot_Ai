@@ -243,6 +243,7 @@ analyzeBtn.addEventListener("click", async () => {
     }
 
     state.proposals = data.staged_mapping;
+    state.pageUrl = pageData.url || "";
     state.editedValues = {};
     state.screen = "proposals";
     render();
@@ -273,8 +274,9 @@ approveBtn.addEventListener("click", async () => {
   approveBtn.textContent = "Writing…";
 
   try {
+    const pageUrlParam = state.pageUrl || "";
     const response = await fetch(
-      `${BACKEND}/commit?workbook_path=${encodeURIComponent(workbookPath)}&page_url=${encodeURIComponent(activeTabUrl || '')}`,
+      `${BACKEND}/commit?workbook_path=${encodeURIComponent(workbookPath)}${pageUrlParam ? `&page_url=${encodeURIComponent(pageUrlParam)}` : ''}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
