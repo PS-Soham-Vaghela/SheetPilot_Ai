@@ -47,21 +47,13 @@ In logistics, procurement, e-commerce, recruitment, and accounting, professional
 ---
 
 ## 🚀 Key Features Overview
+<img width="1616" height="973" alt="ChatGPT Image Aug 17, 2026, 01_04_51 PM" src="https://github.com/user-attachments/assets/ead7400f-2943-451d-88cb-957ee90ef936" />
 
-| Feature | Description |
-| :--- | :--- |
-| **⚡ Live In-Browser Spreadsheet Editor** | Interactive table grid with formula bar (`fx`), keyboard navigation (arrows/Tab/Enter), inline cell editing, row/column operations, auto-save, and tab switching. |
-| **🔍 AI Schema & Column Mapping** | Auto-detects Excel column headers (`Vendor Name`, `GST`, `Invoice Number`, `Due Date`, `Amount`, etc.) and maps them dynamically to web content. |
-| **🤖 Groq LLM Inference** | Ultra-low latency reasoning powered by `llama-3.1-8b-instant` on Groq Cloud. |
-| **📚 Hybrid RAG Search** | Combines lexical keyword scoring with dense vector embeddings (`sentence-transformers/all-MiniLM-L6-v2`) for pinpoint extraction accuracy. |
-| **🧩 Chrome Side Panel Extension** | Manifest V3 extension with live DOM scraping, automatic empty row detection, and direct sync. |
-| **📋 Starter Templates & Custom Schemas** | Quick-start new workbooks for *Vendor Invoices*, *Lead Generation*, *E-Commerce Catalogs*, or custom columns. |
-| **💬 Spreadsheet Chat Copilot** | Conversational Q&A with spreadsheet contents using RAG indexing and LLM reasoning. |
-| **⏪ Audit History & Rollback / Undo** | Complete synchronization logs with search, date filters, CSV export, and 1-click undo. |
 
 ---
 
-## 🛠 System Architecture & Workflow
+## 🛠 System Architecture & Workflow<img width="1024" height="1536" alt="ChatGPT Image Aug 17, 2026, 12_59_23 PM" src="https://github.com/user-attachments/assets/5ae237a8-c0d9-4c8e-9384-3022b5798f72" />
+
 
 ```mermaid
 flowchart TB
